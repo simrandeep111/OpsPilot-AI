@@ -12,12 +12,12 @@ class FakeDetector:
     def __init__(self, probability=0.91, problem_type="cpu_saturation", severity="medium"):
         self.decision = JevDecision(probability, problem_type, 0.94, severity, 0.88, {})
 
-    def detect(self, metrics, aws_context=None):
+    def detect(self, metrics, source_context=None):
         return self.decision
 
 
 class FakeAnalyzer:
-    async def analyze(self, metrics, problem_type, severity, aws_context=None):
+    async def analyze(self, metrics, problem_type, severity, source_context=None):
         return Analysis("CPU demand exceeds capacity.", "Increase replicas.", "test", ["i-123"])
 
 

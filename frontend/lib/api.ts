@@ -13,7 +13,7 @@ export type IntegrationStatus = {
   ai: { configured: boolean; provider: "openai" | "anthropic" | "groq" | null; model: string | null };
   decision_model: { configured: boolean; provider: "openrouter"; model: string | null };
   slack: { configured: boolean };
-  aws: { configured: boolean; role_arn: string | null; regions: string[] };
+  prometheus: { configured: boolean; url: string | null; auth_type: "none" | "basic" | "bearer"; service_name: string };
 };
 
 export function getIntegrationStatus() {
@@ -21,6 +21,6 @@ export function getIntegrationStatus() {
     ai: { configured: false, provider: null, model: null },
     decision_model: { configured: false, provider: "openrouter", model: null },
     slack: { configured: false },
-    aws: { configured: false, role_arn: null, regions: [] },
+    prometheus: { configured: false, url: null, auth_type: "none", service_name: "prometheus" },
   });
 }

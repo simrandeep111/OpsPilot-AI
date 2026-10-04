@@ -1,23 +1,24 @@
 # OpsPilot AI
 
-OpsPilot AI is a cloud-operations demo that monitors AWS infrastructure, detects emerging incidents with a structured decision model, generates a likely cause and recommended action, and optionally sends the result to Slack.
+OpsPilot AI is a monitoring demo that reads Prometheus metrics, detects emerging incidents with a structured decision model, generates a likely cause and recommended action, and sends the result to Slack.
 
 The project includes:
 
 - A Next.js landing page and integration dashboard
 - A FastAPI backend with automatic and manual monitoring endpoints
-- AWS discovery for EC2, ECS, Application Load Balancers, and RDS
-- 60-minute CloudWatch metric trends
+- Prometheus HTTP API integration with None, Basic, and Bearer authentication
+- 60-minute PromQL metric trends
 - Jev decision models through OpenRouter
 - Incident explanations through OpenAI, Anthropic Claude, or Groq
 - Slack webhook notifications
+- A credential-free Try Demo flow using simulated metrics
 
 OpsPilot confirms an abnormal result twice before creating an incident. Incidents and credentials entered through the UI are stored only in backend memory and reset when the backend restarts.
 
 ## Project structure
 
 ```text
-backend/    FastAPI API, AWS collectors, decision model, and monitoring services
+backend/    FastAPI API, Prometheus client, decision model, and monitoring services
 frontend/   Next.js UI built with React, Tailwind CSS, and Radix UI
 ```
 
@@ -26,11 +27,11 @@ frontend/   Next.js UI built with React, Tailwind CSS, and Radix UI
 - Python 3.11 or newer
 - Node.js 20 or newer
 - An OpenRouter API key for incident decisions
-- Optional AWS, AI-provider, and Slack credentials
+- Optional Prometheus, AI-provider, and Slack credentials
 
 ## Local setup
 
-### 1. Start the backend
+### Backend
 
 ```bash
 cd backend
@@ -43,7 +44,7 @@ uvicorn app.main:app --reload --env-file .env
 
 The backend runs at `http://localhost:8000`. API documentation is available at `http://localhost:8000/docs`.
 
-### 2. Start the frontend
+### Frontend
 
 In a second terminal:
 
@@ -53,15 +54,15 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`, select **Get Started**, and configure the integrations you want to use.
+Open `http://localhost:3000` and select **Get Started**.
 
 ## Configuration
 
-Copy `backend/.env.example` to `backend/.env` and configure any integrations that should be available when the backend starts:
+Copy `backend/.env.example` to `backend/.env`:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `MONITORING_ENABLED` | Run the automatic AWS monitoring loop | `true` |
+| `MONITORING_ENABLED` | Run the automatic Prometheus monitoring loop | `true` |
 | `MONITORING_INTERVAL_SECONDS` | Delay between automatic checks | `60` |
 | `CORS_ORIGINS` | Comma-separated frontend URLs allowed to call the API | `http://localhost:3000` |
 | `OPENROUTER_API_KEY` | OpenRouter key used by the decision model | Empty |
@@ -71,95 +72,45 @@ Copy `backend/.env.example` to `backend/.env` and configure any integrations tha
 | `AI_API_KEY` | API key for the selected AI provider | Empty |
 | `AI_MODEL` | Model used for cause and action analysis | `openai/gpt-oss-20b` |
 | `SLACK_WEBHOOK_URL` | Slack incoming-webhook URL | Empty |
-| `AWS_ROLE_ARN` | Monitoring role assumed by OpsPilot | Empty |
-| `AWS_EXTERNAL_ID` | External ID required by the role trust policy | Empty |
-| `AWS_REGIONS` | Comma-separated AWS regions | `us-east-1` |
+| `PROMETHEUS_URL` | Base URL of the Prometheus HTTP API | Empty |
+| `PROMETHEUS_AUTH_TYPE` | `none`, `basic`, or `bearer` | `none` |
+| `PROMETHEUS_USERNAME` | Basic Auth username | Empty |
+| `PROMETHEUS_PASSWORD` | Basic Auth password | Empty |
+| `PROMETHEUS_TOKEN` | Bearer token | Empty |
+| `PROMETHEUS_SERVICE_NAME` | Service name attached to collected snapshots | `prometheus` |
+| `PROMETHEUS_ALLOW_PRIVATE` | Allow localhost/private Prometheus URLs | `false` |
 
-The same services can be configured from the Integrations page. Values entered in the UI are kept only in backend memory. Use environment variables or a secrets manager for deployed environments.
+Integrations can also be configured from the UI. Use environment variables or a secrets manager for deployed environments.
 
-## AWS IAM setup
+## Prometheus setup
 
-OpsPilot uses the AWS SDK's default credential chain to obtain its initial identity, then calls `sts:AssumeRole` to access the monitoring role. Configure the following three IAM policies separately.
+The integration tests the connection with `GET /api/v1/query?query=up` and reads one hour of data through `/api/v1/query_range` at five-minute resolution.
 
-For local development, provide the caller identity through a normal AWS profile or standard AWS credential environment variables. In a hosted environment, attach an execution role to the backend service. Do not place long-lived AWS access keys in the repository.
+OpsPilot queries these common metric names:
 
-### 1. Monitoring role permissions policy
+| Signal | Expected Prometheus metric |
+| --- | --- |
+| CPU | `node_cpu_seconds_total` |
+| Memory | `node_memory_MemAvailable_bytes`, `node_memory_MemTotal_bytes` |
+| P95 latency | `http_request_duration_seconds_bucket` |
+| Errors and request rate | `http_requests_total` |
+| Target availability | `up` |
 
-Attach this read-only permissions policy to the role identified by `AWS_ROLE_ARN`:
+Metric names vary between applications. Adjust `PROMQL_QUERIES` in `backend/app/integrations/prometheus/client.py` if your exporters use different names.
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeInstances",
-        "ec2:DescribeInstanceStatus",
-        "ec2:DescribeRegions",
-        "ecs:ListClusters",
-        "ecs:ListServices",
-        "ecs:ListTasks",
-        "ecs:DescribeServices",
-        "ecs:DescribeTasks",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeTargetGroups",
-        "elasticloadbalancing:DescribeTargetHealth",
-        "cloudwatch:GetMetricStatistics",
-        "rds:DescribeDBInstances"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
+For local Prometheus at `http://localhost:9090`, set:
+
+```ini
+PROMETHEUS_ALLOW_PRIVATE=true
 ```
 
-### 2. OpsPilot caller permissions policy
+Keep this `false` on a public deployment. A deployed backend can connect only to a Prometheus server reachable from its network; it cannot reach Prometheus running on a recruiter's laptop.
 
-Attach this policy to the IAM user or execution role that runs OpsPilot. Replace the resource with the monitoring role ARN:
+## Try Demo
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/<OPSPILOT_MONITORING_ROLE>"
-    }
-  ]
-}
-```
+Try Demo does not require Prometheus. Connect the Decision Model, AI Provider, and Slack, then select **Try Demo**. OpsPilot sends a simulated abnormal snapshot twice, creates the confirmed incident, generates the analysis, and sends the Slack alert.
 
-### 3. Monitoring role trust policy
-
-Set the monitoring role's trust relationship to the identity running OpsPilot. Use the same external ID in this policy and in `AWS_EXTERNAL_ID` or the Integrations page.
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::<CALLER_ACCOUNT_ID>:role/<OPSPILOT_CALLER_ROLE>"
-      },
-      "Action": "sts:AssumeRole",
-      "Condition": {
-        "StringEquals": {
-          "sts:ExternalId": "<RANDOM_EXTERNAL_ID>"
-        }
-      }
-    }
-  ]
-}
-```
-
-If OpsPilot runs under an IAM user during local development, replace the role ARN under `Principal` with that user's ARN. Use a unique, randomly generated external ID.
-
-## Test without an AWS account
-
-Configure the OpenRouter decision model, start the backend, and submit the same abnormal snapshot twice. The second request satisfies the confirmation check:
+You can also submit the same sample manually twice:
 
 ```bash
 curl -X POST http://localhost:8000/api/metrics/analyze \
@@ -178,35 +129,28 @@ curl -X POST http://localhost:8000/api/metrics/analyze \
   }'
 ```
 
-Repeat the request once, then view incidents at `http://localhost:8000/api/incidents`.
-
 ## Main API endpoints
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Backend health and configuration summary |
+| `GET` | `/health` | Backend health and integration summary |
 | `GET` | `/api/integrations` | Current integration status |
+| `POST` | `/api/integrations/prometheus` | Test and configure Prometheus |
 | `POST` | `/api/integrations/decision-model` | Test and configure OpenRouter/Jev |
 | `POST` | `/api/integrations/ai` | Test and configure the AI provider |
-| `POST` | `/api/integrations/aws` | Test and configure the AWS role |
 | `POST` | `/api/integrations/slack` | Test and configure Slack |
-| `GET` | `/api/integrations/aws/inventory` | Collect the AWS resource inventory |
-| `POST` | `/api/metrics/collect` | Collect AWS metrics and analyze them |
+| `POST` | `/api/metrics/collect` | Collect Prometheus metrics and analyze them |
 | `POST` | `/api/metrics/analyze` | Analyze a supplied metric snapshot |
 | `GET` | `/api/incidents` | List incidents |
 | `PATCH` | `/api/incidents/{id}/resolve` | Resolve an incident |
 
 ## Tests and checks
 
-Run the backend test suite:
-
 ```bash
 cd backend
 source .venv/bin/activate
 python -m unittest discover -s tests -v
 ```
-
-Check and build the frontend:
 
 ```bash
 cd frontend
@@ -218,5 +162,6 @@ npm run build
 
 - Set `NEXT_PUBLIC_API_URL` to the deployed backend URL before building the frontend.
 - Set `CORS_ORIGINS` to the deployed frontend URL in the backend environment.
+- Keep `PROMETHEUS_ALLOW_PRIVATE=false` on public deployments.
 - Store credentials in the hosting provider's secret manager or environment settings.
-- The current incident store and UI-provided credentials are in-memory and are intended for a demo, not durable production storage.
+- The current incident store and UI-provided credentials are in-memory and intended for a demo, not durable production storage.

@@ -11,33 +11,31 @@ logger = logging.getLogger("uvicorn.error")
 
 
 class MonitoringService:
-    def __init__(self, settings, detector, analyzer, incidents, notifier, aws):
+    def __init__(self, settings, detector, analyzer, incidents, notifier, metrics_source):
         self.settings = settings
         self.detector = detector
         self.analyzer = analyzer
         self.incidents = incidents
         self.notifier = notifier
-        self.aws = aws
+        self.metrics_source = metrics_source
         self.latest: dict[str, MetricSnapshot] = {}
         self._abnormal_checks: dict[str, int] = {}
 
     async def collect_all(self) -> list[MetricSnapshot]:
-        snapshots = await self.aws.metric_snapshots()
+        snapshots = await self.metrics_source.metric_snapshots()
         self.latest.update({snapshot.service: snapshot for snapshot in snapshots})
         return snapshots
 
     async def analyze(self, metrics: MetricSnapshot) -> Incident | None:
         self.latest[metrics.service] = metrics
-        aws_context = {}
-        if self.aws and self.aws.configured:
-            try:
-                inventory = self.aws.last_inventory or await self.aws.inventory()
-                aws_context = self.aws.context_for(metrics, inventory)
-            except Exception as exc:
-                logger.warning("AWS inventory failed: %s", exc)
+        source_context = (
+            self.metrics_source.context_for(metrics)
+            if self.metrics_source and self.metrics_source.configured
+            else {}
+        )
         try:
             decision = await asyncio.to_thread(
-                self.detector.detect, metrics, aws_context
+                self.detector.detect, metrics, source_context
             )
         except Exception as exc:
             self._abnormal_checks.pop(metrics.service, None)
@@ -65,7 +63,7 @@ class MonitoringService:
 
         try:
             analysis = await self.analyzer.analyze(
-                metrics, decision.problem_type, decision.severity, aws_context=aws_context
+                metrics, decision.problem_type, decision.severity, source_context=source_context
             )
         except Exception as exc:
             logger.warning("AI analysis failed; using fallback: %s", exc)
@@ -86,7 +84,7 @@ class MonitoringService:
             recommended_action=analysis.recommended_action,
             analysis_source=analysis.source,
             affected_resources=analysis.affected_resources,
-            aws_context=aws_context,
+            source_context=source_context,
             jev_answers=decision.answers,
             updated_at=datetime.now(timezone.utc),
         )

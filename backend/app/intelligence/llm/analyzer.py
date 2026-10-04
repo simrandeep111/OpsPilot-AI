@@ -98,7 +98,7 @@ class AIAnalyzer:
         metrics: MetricSnapshot,
         problem_type: str,
         severity: str,
-        aws_context: dict | None = None,
+        source_context: dict | None = None,
     ) -> Analysis:
         if not self.configured:
             return Analysis(
@@ -112,7 +112,7 @@ class AIAnalyzer:
             metrics.as_context(),
             problem_type,
             severity,
-            json.dumps(aws_context or {}, default=str)[:20000],
+            json.dumps(source_context or {}, default=str)[:20000],
         )
         if self.provider == "openai":
             payload = {

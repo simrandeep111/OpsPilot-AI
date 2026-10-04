@@ -9,12 +9,12 @@ from app.main import app
 
 
 class FakeDetector:
-    def detect(self, metrics, aws_context=None):
+    def detect(self, metrics, source_context=None):
         return JevDecision(0.91, "cpu_saturation", 0.94, "high", 0.88, {})
 
 
 class FakeAnalyzer:
-    async def analyze(self, metrics, problem_type, severity, aws_context=None):
+    async def analyze(self, metrics, problem_type, severity, source_context=None):
         return Analysis("CPU demand exceeds capacity.", "Increase replicas.", "test", ["i-123"])
 
 

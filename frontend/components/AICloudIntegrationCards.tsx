@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { BrainCircuit, CheckCircle2, CircleAlert, Cloud, GitBranch, Loader2, MessageSquare, X } from "lucide-react";
+import { Activity, BrainCircuit, CheckCircle2, CircleAlert, GitBranch, Loader2, MessageSquare, X } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { Badge, Button, Card, Dialog } from "./ui";
 
 
 type Status = "idle" | "testing" | "success" | "error";
 type Provider = "openai" | "anthropic" | "groq";
+type PrometheusAuthType = "none" | "basic" | "bearer";
 
 const PROVIDERS: Record<Provider, { label: string; models: { id: string; label: string }[] }> = {
   openai: {
@@ -206,32 +207,44 @@ export function AIProviderIntegrationCard({ initiallyConnected, initialProvider,
   );
 }
 
-export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initialRegions }: { initiallyConnected: boolean; initialRoleArn: string | null; initialRegions: string[] }) {
+export function PrometheusIntegrationCard({ initiallyConnected, initialUrl, initialAuthType, initialServiceName }: {
+  initiallyConnected: boolean;
+  initialUrl: string | null;
+  initialAuthType: PrometheusAuthType;
+  initialServiceName: string;
+}) {
   const [open, setOpen] = useState(false);
   const [connected, setConnected] = useState(initiallyConnected);
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
   const [demoStatus, setDemoStatus] = useState<Status>("idle");
   const [demoMessage, setDemoMessage] = useState("");
-  const [roleArn, setRoleArn] = useState(initialRoleArn ?? "");
-  const [externalId, setExternalId] = useState("");
-  const [regions, setRegions] = useState(initialRegions.join(", ") || "us-east-1");
+  const [url, setUrl] = useState(initialUrl ?? "");
+  const [authType, setAuthType] = useState<PrometheusAuthType>(initialAuthType);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [token, setToken] = useState("");
+  const [serviceName, setServiceName] = useState(initialServiceName || "prometheus");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setStatus("testing");
     try {
-      const payload = await connect("aws", {
-        role_arn: roleArn,
-        external_id: externalId,
-        regions: regions.split(",").map((region) => region.trim()).filter(Boolean),
+      const payload = await connect("prometheus", {
+        url,
+        auth_type: authType,
+        username: authType === "basic" ? username : null,
+        password: authType === "basic" ? password : null,
+        token: authType === "bearer" ? token : null,
+        service_name: serviceName,
       });
       setConnected(true);
-      setExternalId("");
-      setMessage(`Connected to AWS account ${payload.account_id}.`);
+      setPassword("");
+      setToken("");
+      setMessage(`Prometheus connected. ${payload.targets} target${payload.targets === 1 ? "" : "s"} visible.`);
       setStatus("success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "AWS connection failed.");
+      setMessage(error instanceof Error ? error.message : "Prometheus connection failed.");
       setStatus("error");
     }
   }
@@ -281,24 +294,38 @@ export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initial
   return (
     <Card className="p-6 sm:p-7">
       <div className="flex items-start justify-between gap-5">
-        <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><Cloud className="size-5 text-neutral-700" /></div>
+        <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><Activity className="size-5 text-neutral-700" /></div>
         {connected && <Badge tone="green"><span className="mr-1.5 size-1.5 rounded-full bg-emerald-500" />Connected</Badge>}
       </div>
-      <h2 className="mt-6 text-lg font-semibold">AWS CloudWatch</h2>
-      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Monitor your AWS resources automatically with CloudWatch Metrics.</p>
+      <h2 className="mt-6 text-lg font-semibold">Prometheus Monitoring</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Connect Prometheus to track CPU, memory, latency, errors, request traffic, and service availability.</p>
       <div className="mt-6 flex flex-wrap gap-2">
-        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect AWS" description="Use a cross-account IAM role with read-only permissions.">
+        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect Prometheus" description="Connect a reachable Prometheus HTTP API using optional authentication.">
           <form className="mt-6 space-y-4" onSubmit={submit}>
-            <label className="block text-sm font-medium">IAM role ARN
-              <input value={roleArn} onChange={(event) => setRoleArn(event.target.value)} required placeholder="arn:aws:iam::123456789012:role/OpsPilotReadOnly" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            <label className="block text-sm font-medium">Prometheus URL
+              <input type="url" value={url} onChange={(event) => setUrl(event.target.value)} required placeholder="https://prometheus.example.com" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
             </label>
-            <label className="block text-sm font-medium">External ID
-              <input type="password" value={externalId} onChange={(event) => setExternalId(event.target.value)} required autoComplete="off" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            <label className="block text-sm font-medium">Service name
+              <input value={serviceName} onChange={(event) => setServiceName(event.target.value)} required pattern="[a-zA-Z0-9_.:/-]+" placeholder="payment-api" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
             </label>
-            <label className="block text-sm font-medium">AWS regions
-              <input value={regions} onChange={(event) => setRegions(event.target.value)} required placeholder="us-east-1, us-west-2" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
-              <span className="mt-1 block text-xs font-normal text-neutral-400">Separate multiple regions with commas.</span>
+            <label className="block text-sm font-medium">Authentication
+              <select value={authType} onChange={(event) => setAuthType(event.target.value as PrometheusAuthType)} className="mt-2 h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100">
+                <option value="none">None</option>
+                <option value="basic">Basic Auth</option>
+                <option value="bearer">Bearer Token</option>
+              </select>
             </label>
+            {authType === "basic" && <>
+              <label className="block text-sm font-medium">Username
+                <input value={username} onChange={(event) => setUsername(event.target.value)} required autoComplete="username" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+              </label>
+              <label className="block text-sm font-medium">Password
+                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+              </label>
+            </>}
+            {authType === "bearer" && <label className="block text-sm font-medium">Bearer token
+              <input type="password" value={token} onChange={(event) => setToken(event.target.value)} required autoComplete="off" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            </label>}
             <Notice status={status} message={message} />
             <div className="flex justify-end pt-2"><Button type="submit" disabled={status === "testing"}>{status === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}{status === "testing" ? "Testing" : "Test and Connect"}</Button></div>
           </form>
@@ -308,7 +335,7 @@ export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initial
           {demoStatus === "testing" ? "Running Demo" : "Try Demo"}
         </Button>
       </div>
-      <p className="mt-3 text-xs text-neutral-400">Requires Decision Model, AI Provider, and Slack.</p>
+      <p className="mt-3 text-xs text-neutral-400">Try Demo requires Decision Model, AI Provider, and Slack.</p>
       <Toast status={demoStatus} message={demoMessage} onClose={() => { setDemoStatus("idle"); setDemoMessage(""); }} />
     </Card>
   );

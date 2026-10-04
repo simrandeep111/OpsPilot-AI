@@ -42,10 +42,10 @@ QUESTIONS = {
 }
 
 
-def build_jev_state(metrics, aws_context=None):
+def build_jev_state(metrics, source_context=None):
     return {
         "metrics": metrics.model_dump(mode="json"),
-        "aws_context": aws_context or {},
+        "source_context": source_context or {},
     }
 
 
@@ -87,7 +87,7 @@ class JevDetector:
     def detect(
         self,
         metrics: MetricSnapshot,
-        aws_context: dict | None = None,
+        source_context: dict | None = None,
     ) -> JevDecision:
         if not self.configured:
             raise RuntimeError("OPENROUTER_API_KEY is required for Jev decisions")
@@ -97,7 +97,7 @@ class JevDetector:
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "model": self.model,
-                "state": build_jev_state(metrics, aws_context),
+                "state": build_jev_state(metrics, source_context),
                 "questions": QUESTIONS,
             },
         )

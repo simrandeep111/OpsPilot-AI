@@ -20,7 +20,7 @@ class Incident(BaseModel):
     recommended_action: str
     analysis_source: str
     affected_resources: list[str] = Field(default_factory=list)
-    aws_context: dict = Field(default_factory=dict)
+    source_context: dict = Field(default_factory=dict)
     jev_answers: dict = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

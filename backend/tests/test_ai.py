@@ -13,11 +13,11 @@ class AIAnalyzerTest(unittest.IsolatedAsyncioTestCase):
 
         async def handler(request):
             seen_hosts.append(request.url.host)
-            self.assertIn("i-123", request.content.decode())
+            self.assertIn("payment-api", request.content.decode())
             result = json.dumps({
-                "likely_cause": "Instance CPU is saturated.",
-                "affected_resources": ["i-123"],
-                "recommended_action": "Scale the ECS service to three tasks.",
+                "likely_cause": "The service CPU is saturated.",
+                "affected_resources": ["payment-api"],
+                "recommended_action": "Scale the service to three instances.",
             })
             if request.url.host == "api.openai.com":
                 return httpx.Response(200, json={
@@ -27,7 +27,7 @@ class AIAnalyzerTest(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, json={"content": [{"type": "text", "text": result}]})
             return httpx.Response(200, json={"choices": [{"message": {"content": result}}]})
 
-        metrics = MetricSnapshot(service="ec2:i-123", cpu_percent=98)
+        metrics = MetricSnapshot(service="payment-api", cpu_percent=98)
         models = {
             "openai": "gpt-5.6-luna",
             "anthropic": "claude-sonnet-5",
@@ -39,9 +39,9 @@ class AIAnalyzerTest(unittest.IsolatedAsyncioTestCase):
                     metrics,
                     "cpu_saturation",
                     "high",
-                    {"ec2_instances": [{"id": "i-123", "state": "running"}]},
+                    {"metrics_source": "prometheus", "service": "payment-api"},
                 )
-                self.assertEqual(result.affected_resources, ["i-123"])
+                self.assertEqual(result.affected_resources, ["payment-api"])
                 self.assertEqual(result.source, f"{provider}:{model}")
 
         self.assertEqual(

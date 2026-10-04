@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.dependencies import analyzer, detector, notifier, prometheus
 from app.core.config import settings
 
 
@@ -11,9 +12,10 @@ async def health():
     return {
         "status": "ok",
         "monitoring": settings.monitoring_enabled,
-        "metrics_source": "aws_cloudwatch",
+        "metrics_source": "prometheus",
+        "prometheus_configured": prometheus.configured,
         "jev_model": settings.jev_model,
-        "jev_configured": bool(settings.openrouter_api_key),
-        "ai_configured": bool(settings.ai_api_key),
-        "slack_configured": bool(settings.slack_webhook_url),
+        "jev_configured": detector.configured,
+        "ai_configured": analyzer.configured,
+        "slack_configured": bool(notifier.webhook_url),
     }

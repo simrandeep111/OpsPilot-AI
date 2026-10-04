@@ -33,13 +33,13 @@ class SlackNotifierTest(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, text="ok")
 
         incident = Incident(
-            service="ec2:test-instance",
+            service="payment-api",
             problem_type="error_spike",
             severity="high",
             incident_probability=0.15,
             classification_confidence=0.71,
             metrics=MetricSnapshot(
-                service="ec2:test-instance", resource_type="ec2", resource_id="i-test123",
+                service="payment-api", resource_type="prometheus", resource_id="payment-api",
                 cpu_percent=98, memory_percent=92, latency_ms=2500, error_rate_percent=15,
                 trends={"cpu_percent": MetricTrend(
                     baseline=50, average=65, peak=98, rate_of_change_per_minute=1.1,
@@ -51,7 +51,7 @@ class SlackNotifierTest(unittest.IsolatedAsyncioTestCase):
             likely_cause="Resource saturation is causing errors.",
             recommended_action="Scale the service and inspect recent deployments.",
             analysis_source="groq:qwen/qwen3.8-27b",
-            affected_resources=["i-test123"],
+            affected_resources=["payment-api"],
         )
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             await SlackNotifier("https://hooks.slack.com/services/test/value/key", client).send_incident(incident)

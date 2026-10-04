@@ -26,13 +26,13 @@ class Settings:
         or ("openai/gpt-oss-20b" if os.getenv("GROQ_API_KEY") else None)
     )
     slack_webhook_url: str | None = os.getenv("SLACK_WEBHOOK_URL")
-    aws_role_arn: str | None = os.getenv("AWS_ROLE_ARN")
-    aws_external_id: str | None = os.getenv("AWS_EXTERNAL_ID")
-    aws_regions: tuple[str, ...] = tuple(
-        region.strip()
-        for region in os.getenv("AWS_REGIONS", "us-east-1").split(",")
-        if region.strip()
-    )
+    prometheus_url: str | None = os.getenv("PROMETHEUS_URL")
+    prometheus_auth_type: str = os.getenv("PROMETHEUS_AUTH_TYPE", "none")
+    prometheus_username: str | None = os.getenv("PROMETHEUS_USERNAME")
+    prometheus_password: str | None = os.getenv("PROMETHEUS_PASSWORD")
+    prometheus_token: str | None = os.getenv("PROMETHEUS_TOKEN")
+    prometheus_service_name: str = os.getenv("PROMETHEUS_SERVICE_NAME", "prometheus")
+    prometheus_allow_private: bool = _enabled("PROMETHEUS_ALLOW_PRIVATE")
 
 
 settings = Settings()

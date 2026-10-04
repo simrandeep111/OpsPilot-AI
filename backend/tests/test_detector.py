@@ -51,7 +51,7 @@ class DetectorTest(unittest.TestCase):
                     sample_count=12, window_minutes=60,
                 )},
             ),
-            {"ec2_instance": {"id": "i-123", "instance_status": "ok"}},
+            {"metrics_source": "prometheus", "service": "payments"},
         )
         self.assertEqual(decision.problem_type, "cpu_saturation")
         self.assertEqual(decision.severity, "high")

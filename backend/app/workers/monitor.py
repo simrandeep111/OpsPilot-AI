@@ -10,5 +10,5 @@ async def monitor_forever(monitoring, interval_seconds: int) -> None:
         try:
             await monitoring.run_all()
         except Exception as exc:
-            logger.error("CloudWatch monitoring failed: %s", exc)
+            logger.error("Prometheus monitoring failed: %s", exc)
         await asyncio.sleep(interval_seconds)

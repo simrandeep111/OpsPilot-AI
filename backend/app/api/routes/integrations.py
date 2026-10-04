@@ -2,8 +2,8 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.dependencies import analyzer, aws, detector, notifier
-from app.models.integration import AIConnection, AWSConnection, DecisionModelConnection, SlackConnection
+from app.api.dependencies import analyzer, detector, notifier, prometheus
+from app.models.integration import AIConnection, DecisionModelConnection, PrometheusConnection, SlackConnection
 
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
@@ -23,10 +23,11 @@ async def integrations():
             "model": detector.model,
         },
         "slack": {"configured": bool(notifier.webhook_url)},
-        "aws": {
-            "configured": aws.configured,
-            "role_arn": aws.role_arn,
-            "regions": aws.regions,
+        "prometheus": {
+            "configured": prometheus.configured,
+            "url": prometheus.base_url,
+            "auth_type": prometheus.auth_type,
+            "service_name": prometheus.service_name,
         },
     }
 
@@ -61,13 +62,19 @@ async def connect_ai(connection: AIConnection):
         raise HTTPException(status_code=400, detail=f"AI provider connection failed: {exc}") from exc
 
 
-@router.post("/aws")
-async def connect_aws(connection: AWSConnection):
+@router.post("/prometheus")
+async def connect_prometheus(connection: PrometheusConnection):
     try:
-        identity = await aws.test_and_configure(connection)
-        return {"configured": True, "regions": aws.regions, **identity}
+        targets = await prometheus.test_and_configure(connection)
+        return {
+            "configured": True,
+            "url": prometheus.base_url,
+            "auth_type": prometheus.auth_type,
+            "service_name": prometheus.service_name,
+            "targets": targets,
+        }
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"AWS connection failed: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"Prometheus connection failed: {exc}") from exc
 
 
 @router.post("/slack")
@@ -78,12 +85,3 @@ async def connect_slack(connection: SlackConnection):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Slack connection failed: {exc}") from exc
 
-
-@router.get("/aws/inventory")
-async def aws_inventory():
-    if not aws.configured:
-        raise HTTPException(status_code=400, detail="AWS is not configured")
-    try:
-        return await aws.inventory()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"AWS inventory failed: {exc}") from exc
