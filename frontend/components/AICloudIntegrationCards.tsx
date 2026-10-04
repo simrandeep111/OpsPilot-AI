@@ -1,0 +1,297 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import { BrainCircuit, CheckCircle2, CircleAlert, Cloud, GitBranch, Loader2, MessageSquare } from "lucide-react";
+import { API_URL } from "@/lib/api";
+import { Badge, Button, Card, Dialog } from "./ui";
+
+
+type Status = "idle" | "testing" | "success" | "error";
+type Provider = "openai" | "anthropic" | "groq";
+
+const PROVIDERS: Record<Provider, { label: string; models: { id: string; label: string }[] }> = {
+  openai: {
+    label: "OpenAI",
+    models: [
+      { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+    ],
+  },
+  anthropic: {
+    label: "Anthropic Claude",
+    models: [
+      { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
+      { id: "claude-opus-5", label: "Claude Opus 5" },
+      { id: "claude-fable-5", label: "Claude Fable 5" },
+    ],
+  },
+  groq: {
+    label: "Groq",
+    models: [
+      { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+      { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
+      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
+      { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B" },
+    ],
+  },
+};
+
+const DECISION_MODELS = [
+  { id: "~typesafe/jev-latest", label: "Jev Latest" },
+  { id: "typesafe/jev-1.13", label: "Jev 1.13" },
+];
+
+function Notice({ status, message }: { status: Status; message: string }) {
+  if (status !== "success" && status !== "error") return null;
+  const Icon = status === "success" ? CheckCircle2 : CircleAlert;
+  return <div className={`flex items-center gap-2 rounded-lg p-3 text-sm ${status === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}><Icon className="size-4 shrink-0" />{message}</div>;
+}
+
+async function connect(path: string, body: object) {
+  const response = await fetch(`${API_URL}/api/integrations/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail ?? "Connection failed");
+  return payload;
+}
+
+export function DecisionModelIntegrationCard({ initiallyConnected, initialModel }: {
+  initiallyConnected: boolean;
+  initialModel: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [connected, setConnected] = useState(initiallyConnected);
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState(
+    DECISION_MODELS.some((item) => item.id === initialModel) ? initialModel! : DECISION_MODELS[0].id
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setStatus("testing");
+    try {
+      await connect("decision-model", { provider: "openrouter", api_key: apiKey, model });
+      setConnected(true);
+      setApiKey("");
+      setMessage("OpenRouter decision model connected successfully.");
+      setStatus("success");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Decision model connection failed.");
+      setStatus("error");
+    }
+  }
+
+  return (
+    <Card className="p-6 sm:p-7">
+      <div className="flex items-start justify-between gap-5">
+        <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><GitBranch className="size-5 text-neutral-700" /></div>
+        {connected && <Badge tone="green"><span className="mr-1.5 size-1.5 rounded-full bg-emerald-500" />Connected</Badge>}
+      </div>
+      <h2 className="mt-6 text-lg font-semibold">Decision Model</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Use an OpenRouter decision model to detect and classify infrastructure incidents.</p>
+      <div className="mt-6">
+        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect Decision Model" description="Choose a decision model and enter your OpenRouter API key.">
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            <label className="block text-sm font-medium">Provider
+              <select disabled value="openrouter" className="mt-2 h-10 w-full rounded-lg border bg-neutral-50 px-3 text-sm text-neutral-600">
+                <option value="openrouter">OpenRouter</option>
+              </select>
+            </label>
+            <label className="block text-sm font-medium">Decision model
+              <select value={model} onChange={(event) => setModel(event.target.value)} className="mt-2 h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100">
+                {DECISION_MODELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-medium">OpenRouter API key
+              <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} required minLength={10} autoComplete="off" placeholder="sk-or-v1-..." className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            </label>
+            <Notice status={status} message={message} />
+            <div className="flex justify-end pt-2"><Button type="submit" disabled={status === "testing"}>{status === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}{status === "testing" ? "Testing" : "Test and Connect"}</Button></div>
+          </form>
+        </Dialog>
+      </div>
+    </Card>
+  );
+}
+
+export function AIProviderIntegrationCard({ initiallyConnected, initialProvider, initialModel }: {
+  initiallyConnected: boolean;
+  initialProvider: Provider | null;
+  initialModel: string | null;
+}) {
+  const defaultProvider = initialProvider ?? "openai";
+  const defaultModel = PROVIDERS[defaultProvider].models.some((item) => item.id === initialModel)
+    ? initialModel!
+    : PROVIDERS[defaultProvider].models[0].id;
+  const [open, setOpen] = useState(false);
+  const [connected, setConnected] = useState(initiallyConnected);
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [provider, setProvider] = useState<Provider>(defaultProvider);
+  const [model, setModel] = useState(defaultModel);
+
+  function changeProvider(value: Provider) {
+    setProvider(value);
+    setModel(PROVIDERS[value].models[0].id);
+    setStatus("idle");
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setStatus("testing");
+    try {
+      await connect("ai", { provider, api_key: apiKey, model });
+      setConnected(true);
+      setApiKey("");
+      setMessage(`${PROVIDERS[provider].label} connected successfully.`);
+      setStatus("success");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "AI provider connection failed.");
+      setStatus("error");
+    }
+  }
+
+  return (
+    <Card className="p-6 sm:p-7">
+      <div className="flex items-start justify-between gap-5">
+        <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><BrainCircuit className="size-5 text-neutral-700" /></div>
+        {connected && <Badge tone="green"><span className="mr-1.5 size-1.5 rounded-full bg-emerald-500" />Connected</Badge>}
+      </div>
+      <h2 className="mt-6 text-lg font-semibold">AI Provider</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Choose OpenAI, Anthropic Claude, or Groq to explain incidents and recommend solutions.</p>
+      <div className="mt-6">
+        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect AI Provider" description="Choose a provider and model, then enter that provider's API key.">
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            <label className="block text-sm font-medium">Provider
+              <select value={provider} onChange={(event) => changeProvider(event.target.value as Provider)} className="mt-2 h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100">
+                {Object.entries(PROVIDERS).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-medium">Model
+              <select value={model} onChange={(event) => setModel(event.target.value)} className="mt-2 h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100">
+                {PROVIDERS[provider].models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-medium">{PROVIDERS[provider].label} API key
+              <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} required autoComplete="off" placeholder="Enter API key" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            </label>
+            <Notice status={status} message={message} />
+            <div className="flex justify-end pt-2"><Button type="submit" disabled={status === "testing"}>{status === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}{status === "testing" ? "Testing" : "Test and Connect"}</Button></div>
+          </form>
+        </Dialog>
+      </div>
+    </Card>
+  );
+}
+
+export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initialRegions }: { initiallyConnected: boolean; initialRoleArn: string | null; initialRegions: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [connected, setConnected] = useState(initiallyConnected);
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState("");
+  const [roleArn, setRoleArn] = useState(initialRoleArn ?? "");
+  const [externalId, setExternalId] = useState("");
+  const [regions, setRegions] = useState(initialRegions.join(", ") || "us-east-1");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setStatus("testing");
+    try {
+      const payload = await connect("aws", {
+        role_arn: roleArn,
+        external_id: externalId,
+        regions: regions.split(",").map((region) => region.trim()).filter(Boolean),
+      });
+      setConnected(true);
+      setExternalId("");
+      setMessage(`Connected to AWS account ${payload.account_id}.`);
+      setStatus("success");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "AWS connection failed.");
+      setStatus("error");
+    }
+  }
+
+  return (
+    <Card className="p-6 sm:p-7">
+      <div className="flex items-start justify-between gap-5">
+        <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><Cloud className="size-5 text-neutral-700" /></div>
+        {connected && <Badge tone="green"><span className="mr-1.5 size-1.5 rounded-full bg-emerald-500" />Connected</Badge>}
+      </div>
+      <h2 className="mt-6 text-lg font-semibold">AWS</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Monitor your AWS resources automatically with CloudWatch Metrics.</p>
+      <div className="mt-6">
+        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect AWS" description="Use a cross-account IAM role with read-only permissions.">
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            <label className="block text-sm font-medium">IAM role ARN
+              <input value={roleArn} onChange={(event) => setRoleArn(event.target.value)} required placeholder="arn:aws:iam::123456789012:role/OpsPilotReadOnly" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            </label>
+            <label className="block text-sm font-medium">External ID
+              <input type="password" value={externalId} onChange={(event) => setExternalId(event.target.value)} required autoComplete="off" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            </label>
+            <label className="block text-sm font-medium">AWS regions
+              <input value={regions} onChange={(event) => setRegions(event.target.value)} required placeholder="us-east-1, us-west-2" className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+              <span className="mt-1 block text-xs font-normal text-neutral-400">Separate multiple regions with commas.</span>
+            </label>
+            <Notice status={status} message={message} />
+            <div className="flex justify-end pt-2"><Button type="submit" disabled={status === "testing"}>{status === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}{status === "testing" ? "Testing" : "Test and Connect"}</Button></div>
+          </form>
+        </Dialog>
+      </div>
+    </Card>
+  );
+}
+
+export function SlackIntegrationCard({ initiallyConnected }: { initiallyConnected: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [connected, setConnected] = useState(initiallyConnected);
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setStatus("testing");
+    try {
+      await connect("slack", { webhook_url: webhookUrl });
+      setConnected(true);
+      setWebhookUrl("");
+      setMessage("Test alert sent successfully.");
+      setStatus("success");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Slack connection failed.");
+      setStatus("error");
+    }
+  }
+
+  return (
+    <Card className="p-6 sm:p-7">
+      <div className="flex items-start justify-between gap-5">
+        <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><MessageSquare className="size-5 text-neutral-700" /></div>
+        {connected && <Badge tone="green"><span className="mr-1.5 size-1.5 rounded-full bg-emerald-500" />Connected</Badge>}
+      </div>
+      <h2 className="mt-6 text-lg font-semibold">Slack</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Receive proactive incident alerts and AI recommendations in Slack.</p>
+      <div className="mt-6">
+        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect Slack" description="Paste the incoming webhook URL created for your OpsPilot alerts channel.">
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            <label className="block text-sm font-medium">Incoming webhook URL
+              <input type="password" value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} required autoComplete="off" placeholder="https://hooks.slack.com/services/..." className="mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100" />
+            </label>
+            <p className="text-xs leading-5 text-neutral-400">The webhook remains hidden and is stored only in backend memory.</p>
+            <Notice status={status} message={message} />
+            <div className="flex justify-end pt-2"><Button type="submit" disabled={status === "testing"}>{status === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}{status === "testing" ? "Testing" : "Test and Connect"}</Button></div>
+          </form>
+        </Dialog>
+      </div>
+    </Card>
+  );
+}
