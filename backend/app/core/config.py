@@ -10,6 +10,11 @@ def _enabled(name: str, default: bool = False) -> bool:
 class Settings:
     monitoring_enabled: bool = _enabled("MONITORING_ENABLED")
     monitoring_interval_seconds: int = int(os.getenv("MONITORING_INTERVAL_SECONDS", "60"))
+    cors_origins: tuple[str, ...] = tuple(
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+        if origin.strip()
+    )
     openrouter_api_key: str | None = os.getenv("OPENROUTER_API_KEY")
     jev_model: str = os.getenv("JEV_MODEL", "typesafe/jev-1.13")
     jev_incident_probability: float = float(os.getenv("JEV_INCIDENT_PROBABILITY", "0.70"))

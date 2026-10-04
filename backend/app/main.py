@@ -32,7 +32,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="OpsPilot AI", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=list(settings.cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

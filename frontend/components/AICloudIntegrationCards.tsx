@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { BrainCircuit, CheckCircle2, CircleAlert, Cloud, GitBranch, Loader2, MessageSquare } from "lucide-react";
+import { BrainCircuit, CheckCircle2, CircleAlert, Cloud, GitBranch, Loader2, MessageSquare, X } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { Badge, Button, Card, Dialog } from "./ui";
 
@@ -47,6 +47,20 @@ function Notice({ status, message }: { status: Status; message: string }) {
   if (status !== "success" && status !== "error") return null;
   const Icon = status === "success" ? CheckCircle2 : CircleAlert;
   return <div className={`flex items-center gap-2 rounded-lg p-3 text-sm ${status === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}><Icon className="size-4 shrink-0" />{message}</div>;
+}
+
+function Toast({ status, message, onClose }: { status: Status; message: string; onClose: () => void }) {
+  if (status !== "success" && status !== "error") return null;
+  const Icon = status === "success" ? CheckCircle2 : CircleAlert;
+  return (
+    <div role={status === "error" ? "alert" : "status"} className={`toast-enter fixed right-4 top-20 z-[60] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-xl border p-4 shadow-xl ${status === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
+      <Icon className="mt-0.5 size-4 shrink-0" />
+      <span className="min-w-0 flex-1 text-sm leading-5">{message}</span>
+      <button type="button" onClick={onClose} aria-label="Close notification" className="grid size-6 shrink-0 place-items-center rounded-md opacity-60 hover:bg-black/5 hover:opacity-100">
+        <X className="size-4" />
+      </button>
+    </div>
+  );
 }
 
 async function connect(path: string, body: object) {
@@ -197,6 +211,8 @@ export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initial
   const [connected, setConnected] = useState(initiallyConnected);
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
+  const [demoStatus, setDemoStatus] = useState<Status>("idle");
+  const [demoMessage, setDemoMessage] = useState("");
   const [roleArn, setRoleArn] = useState(initialRoleArn ?? "");
   const [externalId, setExternalId] = useState("");
   const [regions, setRegions] = useState(initialRegions.join(", ") || "us-east-1");
@@ -220,15 +236,57 @@ export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initial
     }
   }
 
+  async function tryDemo() {
+    const metrics = {
+      service: `demo-checkout-${Date.now()}`,
+      cpu_percent: 96,
+      memory_percent: 82,
+      latency_ms: 2400,
+      error_rate_percent: 18,
+      request_rate: 120,
+      baseline_cpu_percent: 45,
+      baseline_latency_ms: 180,
+      baseline_error_rate_percent: 0.4,
+      baseline_request_rate: 50,
+    };
+    setDemoStatus("testing");
+    setDemoMessage("");
+    try {
+      const statusResponse = await fetch(`${API_URL}/api/integrations`, { cache: "no-store" });
+      if (!statusResponse.ok) throw new Error("Unable to check integration status.");
+      const integrations = await statusResponse.json();
+      if (!integrations.decision_model.configured || !integrations.ai.configured || !integrations.slack.configured) {
+        throw new Error("Connect the Decision Model, AI Provider, and Slack before running Try Demo.");
+      }
+      let incident = null;
+      for (let check = 0; check < 2; check++) {
+        const response = await fetch(`${API_URL}/api/metrics/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(metrics),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail ?? "Demo failed.");
+        incident = payload.incident;
+      }
+      if (!incident) throw new Error("No incident was confirmed. Connect the Decision Model and try again.");
+      setDemoMessage(`${incident.severity} demo incident created successfully.`);
+      setDemoStatus("success");
+    } catch (error) {
+      setDemoMessage(error instanceof Error ? error.message : "Demo failed.");
+      setDemoStatus("error");
+    }
+  }
+
   return (
     <Card className="p-6 sm:p-7">
       <div className="flex items-start justify-between gap-5">
         <div className="grid size-10 place-items-center rounded-lg border bg-neutral-50"><Cloud className="size-5 text-neutral-700" /></div>
         {connected && <Badge tone="green"><span className="mr-1.5 size-1.5 rounded-full bg-emerald-500" />Connected</Badge>}
       </div>
-      <h2 className="mt-6 text-lg font-semibold">AWS</h2>
+      <h2 className="mt-6 text-lg font-semibold">AWS CloudWatch</h2>
       <p className="mt-2 max-w-md text-sm leading-6 text-neutral-500">Monitor your AWS resources automatically with CloudWatch Metrics.</p>
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap gap-2">
         <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setStatus("idle"); }} trigger={<Button variant={connected ? "secondary" : "primary"}>{connected ? "Manage" : "Connect"}</Button>} title="Connect AWS" description="Use a cross-account IAM role with read-only permissions.">
           <form className="mt-6 space-y-4" onSubmit={submit}>
             <label className="block text-sm font-medium">IAM role ARN
@@ -245,7 +303,13 @@ export function AWSIntegrationCard({ initiallyConnected, initialRoleArn, initial
             <div className="flex justify-end pt-2"><Button type="submit" disabled={status === "testing"}>{status === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}{status === "testing" ? "Testing" : "Test and Connect"}</Button></div>
           </form>
         </Dialog>
+        <Button variant="secondary" onClick={tryDemo} disabled={demoStatus === "testing"}>
+          {demoStatus === "testing" && <Loader2 className="mr-2 size-4 animate-spin" />}
+          {demoStatus === "testing" ? "Running Demo" : "Try Demo"}
+        </Button>
       </div>
+      <p className="mt-3 text-xs text-neutral-400">Requires Decision Model, AI Provider, and Slack.</p>
+      <Toast status={demoStatus} message={demoMessage} onClose={() => { setDemoStatus("idle"); setDemoMessage(""); }} />
     </Card>
   );
 }

@@ -63,6 +63,7 @@ Copy `backend/.env.example` to `backend/.env` and configure any integrations tha
 | --- | --- | --- |
 | `MONITORING_ENABLED` | Run the automatic AWS monitoring loop | `true` |
 | `MONITORING_INTERVAL_SECONDS` | Delay between automatic checks | `60` |
+| `CORS_ORIGINS` | Comma-separated frontend URLs allowed to call the API | `http://localhost:3000` |
 | `OPENROUTER_API_KEY` | OpenRouter key used by the decision model | Empty |
 | `JEV_MODEL` | OpenRouter decision-model ID | `typesafe/jev-1.13` |
 | `JEV_INCIDENT_PROBABILITY` | Minimum incident probability | `0.70` |
@@ -216,6 +217,6 @@ npm run build
 ## Deployment notes
 
 - Set `NEXT_PUBLIC_API_URL` to the deployed backend URL before building the frontend.
-- Add the deployed frontend origin to `allow_origins` in `backend/app/main.py`.
+- Set `CORS_ORIGINS` to the deployed frontend URL in the backend environment.
 - Store credentials in the hosting provider's secret manager or environment settings.
 - The current incident store and UI-provided credentials are in-memory and are intended for a demo, not durable production storage.

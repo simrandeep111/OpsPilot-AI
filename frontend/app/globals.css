@@ -72,6 +72,10 @@ input {
   animation: log-cursor 1s steps(1) infinite;
 }
 
+.toast-enter {
+  animation: toast-enter 240ms ease-out both;
+}
+
 @keyframes hero-enter {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
@@ -100,6 +104,11 @@ input {
   50% { opacity: 0; }
 }
 
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-glow,
   .hero-ring,
@@ -108,7 +117,8 @@ input {
   .hero-float-delay,
   .hero-enter,
   .log-row,
-  .log-cursor {
+  .log-cursor,
+  .toast-enter {
     animation: none;
   }
 }

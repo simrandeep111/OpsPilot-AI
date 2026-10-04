@@ -19,6 +19,18 @@ class FakeAnalyzer:
 
 
 class ApiTest(unittest.TestCase):
+    def test_local_frontend_is_allowed_by_cors(self):
+        with TestClient(app) as client:
+            response = client.options(
+                "/health",
+                headers={
+                    "Origin": "http://localhost:3000",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["access-control-allow-origin"], "http://localhost:3000")
+
     def test_mock_metrics_flow_to_incident_api(self):
         detector, analyzer = monitoring.detector, monitoring.analyzer
         monitoring.detector, monitoring.analyzer = FakeDetector(), FakeAnalyzer()
