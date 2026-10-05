@@ -28,7 +28,7 @@ export default function HomePage() {
 
         <div className="hero-enter hero-delay-1 inline-flex items-center gap-2 rounded-full border bg-white/80 px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur">
           <span className="size-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
-          Spotting incidents before they escalate
+          Detecting incidents before they escalate
         </div>
 
         <h1 className="hero-enter hero-delay-2 mt-6 text-balance text-4xl font-semibold tracking-[-0.04em] text-neutral-950 sm:text-6xl">
